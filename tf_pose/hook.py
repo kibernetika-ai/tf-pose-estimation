@@ -13,6 +13,8 @@ PARAMS = {
 
 
 def init_hook(**params):
+    PARAMS.update(params)
+    PARAMS['resize_out_ratio'] = float(PARAMS['resize_out_ratio'])
     global e
 
     e = estimator.TfPoseEstimator(
