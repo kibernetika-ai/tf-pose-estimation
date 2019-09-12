@@ -1,16 +1,23 @@
+import threading
+
 import cv2
 from ml_serving.utils import helpers
+import tensorflow as tf
 
 import estimator
 import networks
+import optic_flow
 
 
 e: estimator.TfPoseEstimator = None
+o: optic_flow.OpticalFlow = optic_flow.OpticalFlow()
 PARAMS = {
     'model': 'mobilenet_thin',
     'resize_out_ratio': 4.0,
     'target_size': (432, 368)
 }
+load_lock = threading.Lock()
+loaded = False
 
 
 def init_hook(**params):
@@ -19,18 +26,36 @@ def init_hook(**params):
     PARAMS['target_size'] = _parse_resolution(PARAMS['target_size'])
     global e
 
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+
     e = estimator.TfPoseEstimator(
-        networks.get_graph_path(PARAMS['model']), target_size=PARAMS['target_size']
+        networks.get_graph_path(PARAMS['model']),
+        target_size=PARAMS['target_size'],
+        tf_config=config,
     )
 
 
 def process(inputs, ctx, **kwargs):
+    global loaded
+    if not loaded:
+        with load_lock:
+            if not loaded:
+                global o
+                o = optic_flow.OpticalFlow(ctx.drivers[0])
+                loaded = True
+
     image, is_video = helpers.load_image(inputs, 'input')
     humans = e.inference(
         image,
         resize_to_default=True,
         upsample_size=PARAMS['resize_out_ratio']
     )
+
+    if ctx.drivers[0].driver_name != 'null':
+        vectors = o.calc_human_speed(image)
+        o.draw_vectors(image, vectors)
+        o.draw_boxes(image)
 
     image = e.draw_humans(image, humans, imgcopy=True)
 

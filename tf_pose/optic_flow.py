@@ -1,0 +1,173 @@
+import cv2
+import numpy as np
+
+
+class OpticalFlow(object):
+    def __init__(self, person_detect_driver=None):
+        self.person_driver = person_detect_driver
+        self.human_boxes = None
+
+    def calc_human_speed(self, frame):
+        if self.human_boxes is None:
+            self.human_boxes = self.detect_persons(frame)
+            return []
+
+        # Compare human_boxes <-> new_boxes
+        new_boxes = self.detect_persons(frame)
+        vectors = []
+        for b0 in self.human_boxes:
+            for b1 in new_boxes:
+                if self._box_intersection(b0, b1) > 0.33:
+                    # Get center vector
+                    vectors.append(self.center_vector(b0, b1))
+
+        self.human_boxes = new_boxes
+        return vectors
+
+    def draw_boxes(self, frame):
+        for box in self.human_boxes:
+            cv2.rectangle(
+                frame,
+                (int(box[0]), int(box[1])),
+                (int(box[2]), int(box[3])),  # (left, top), (right, bottom)
+                (0, 180, 180),
+                thickness=1,
+            )
+
+    @staticmethod
+    def draw_vectors(frame, vectors):
+        coef = 5.
+        if not vectors:
+            return
+
+        for v in vectors:
+            # v: x, y, len, angle
+            x1 = v[0] + v[2] * np.cos(v[3]) * coef
+            y1 = v[1] - v[2] * np.sin(v[3]) * coef
+            cv2.arrowedLine(
+                frame,
+                (int(v[0]), int(v[1])),
+                (int(x1), int(y1)),
+                (0, 0, 0),
+                thickness=2,
+                line_type=cv2.LINE_AA,
+                tipLength=0.4,
+            )
+            cv2.arrowedLine(
+                frame,
+                (int(v[0]), int(v[1])),
+                (int(x1), int(y1)),
+                (255, 255, 255),
+                thickness=1,
+                line_type=cv2.LINE_AA,
+                tipLength=0.4,
+            )
+
+    def detect_persons(self, frame, threshold=0.5):
+        if self.person_driver is None:
+            return None
+        elif self.person_driver.driver_name == "openvino":
+            return self._detect_openvino(frame, threshold)
+        elif self.person_driver.driver_name == "tensorflow":
+            return self._detect_tensorflow(frame, threshold)
+        else:
+            return None
+
+    def _detect_tensorflow(self, frame, threshold=0.5):
+        input_name, input_shape = list(self.person_driver.inputs.items())[0]
+        inference_frame = np.expand_dims(frame, axis=0)
+        outputs = self.person_driver.predict({input_name: inference_frame})
+        boxes = outputs["detection_boxes"].copy().reshape([-1, 4])
+        scores = outputs["detection_scores"].copy().reshape([-1])
+        classes = np.int32((outputs["detection_classes"].copy())).reshape([-1])
+        scores = scores[np.where(scores > threshold)]
+        boxes = boxes[:len(scores)]
+        classes = classes[:len(scores)]
+        boxes = boxes[classes == 1]
+        scores = scores[classes == 1]
+        boxes[:, 0] *= frame.shape[0]
+        boxes[:, 1] *= frame.shape[1]
+        boxes[:, 2] *= frame.shape[0]
+        boxes[:, 3] *= frame.shape[1]
+        boxes[:, [0, 1, 2, 3]] = boxes[:, [1, 0, 3, 2]].astype(int)
+
+        confidence = np.expand_dims(scores, axis=0).transpose()
+        boxes = np.concatenate((boxes, confidence), axis=1)
+
+        return boxes
+
+    def _detect_openvino(self, frame, threshold=0.5, offset=(0, 0)):
+        if self.person_driver is None:
+            return None
+        # Get boxes shaped [N, 5]:
+        # xmin, ymin, xmax, ymax, confidence
+        input_name, input_shape = list(self.person_driver.inputs.items())[0]
+        output_name = list(self.person_driver.outputs)[0]
+        inference_frame = cv2.resize(frame, tuple(input_shape[:-3:-1]), interpolation=cv2.INTER_AREA)
+        inference_frame = np.transpose(inference_frame, [2, 0, 1]).reshape(input_shape)
+        outputs = self.person_driver.predict({input_name: inference_frame})
+        output = outputs[output_name]
+        output = output.reshape(-1, 7)
+        bboxes_raw = output[output[:, 2] > threshold]
+        # Extract 5 values
+        boxes = bboxes_raw[:, 3:7]
+        confidence = np.expand_dims(bboxes_raw[:, 2], axis=0).transpose()
+        boxes = np.concatenate((boxes, confidence), axis=1)
+        # Assign confidence to 4th
+        # boxes[:, 4] = bboxes_raw[:, 2]
+        boxes[:, 0] = boxes[:, 0] * frame.shape[1] + offset[0]
+        boxes[:, 2] = boxes[:, 2] * frame.shape[1] + offset[0]
+        boxes[:, 1] = boxes[:, 1] * frame.shape[0] + offset[1]
+        boxes[:, 3] = boxes[:, 3] * frame.shape[0] + offset[1]
+        return boxes
+
+    @staticmethod
+    def _box_intersection(box_a, box_b):
+        xa = max(box_a[0], box_b[0])
+        ya = max(box_a[1], box_b[1])
+        xb = min(box_a[2], box_b[2])
+        yb = min(box_a[3], box_b[3])
+
+        inter_area = max(0, xb - xa) * max(0, yb - ya)
+
+        box_a_area = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
+        box_b_area = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
+
+        d = float(box_a_area + box_b_area - inter_area)
+        if d == 0:
+            return 0
+        iou = inter_area / d
+        return iou
+
+    def center_vector(self, box_a, box_b):
+        center_xa = (box_a[2] + box_a[0]) / 2
+        center_xb = (box_b[2] + box_b[0]) / 2
+        center_ya = (box_a[3] + box_a[1]) / 2
+        center_yb = (box_b[3] + box_b[1]) / 2
+
+        length = np.sqrt(np.square(center_xb - center_xa) + np.square(center_yb - center_ya))
+        v = np.array([center_xb - center_xa, center_yb - center_ya])
+        angle = np.arctan2(*v.T[::-1])
+
+        return np.array([
+            center_xb, center_yb, length, angle
+        ])
+
+    @staticmethod
+    def _unit_vector(vector):
+        """ Returns the unit vector of the vector.  """
+        return vector / np.linalg.norm(vector)
+
+    def _angle_between(self, v1, v2):
+        """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+                >>> angle_between((1, 0, 0), (0, 1, 0))
+                1.5707963267948966
+                >>> angle_between((1, 0, 0), (1, 0, 0))
+                0.0
+                >>> angle_between((1, 0, 0), (-1, 0, 0))
+                3.141592653589793
+        """
+        v1_u = self._unit_vector(v1)
+        v2_u = self._unit_vector(v2)
+        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
