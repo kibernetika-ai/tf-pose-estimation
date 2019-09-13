@@ -58,6 +58,7 @@ def process(inputs, ctx, **kwargs):
 
     if ctx.drivers[0].driver_name != 'null':
         vectors = o.calc_human_speed(image)
+        # __import__('ipdb').set_trace()
         o.draw_vectors(image, vectors)
         o.draw_boxes(image)
 
