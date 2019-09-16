@@ -5,10 +5,11 @@ import numpy as np
 
 
 class OpticalFlow(object):
-    def __init__(self, person_detect_driver=None):
+    def __init__(self, person_detect_driver=None, intersection_threshold=0.33):
         self.person_driver = person_detect_driver
         self.num_frames = 5
         self.expire_sec = 10
+        self.intersection_threshold = intersection_threshold
         self.human_boxes = None
         self.vectors = []
 
@@ -22,7 +23,7 @@ class OpticalFlow(object):
         new_vectors = []
         for b0 in self.human_boxes:
             for b1 in new_boxes:
-                if self._box_intersection(b0, b1) > 0.33:
+                if self._box_intersection(b0, b1) > self.intersection_threshold:
                     # Get center vector
                     new_vectors.append(self.center_vector(b0, b1))
 
@@ -34,13 +35,14 @@ class OpticalFlow(object):
 
         for v0 in self.vectors:
             for v1 in new_vectors:
-                if v1.distance(v0) <= v1.len[0] + 5:
+                if v1.distance(v0) <= v1.len + 5:
                     v0.update(v1)
 
         # Expire cycle
         i = 0
         while i < len(self.vectors):
             if time.time() - self.vectors[i].updated_at >= self.expire_sec:
+                # print('expire vector {},{}'.format(self.vectors[i].x1, self.vectors[i].y1))
                 del self.vectors[i]
             else:
                 i += 1
@@ -66,11 +68,11 @@ class OpticalFlow(object):
         for v in vectors:
             avg = v.avg_per_frame()
             # v: x, y, len, angle
-            x1 = avg.x + avg.len * np.cos(avg.angle) * coef
-            y1 = avg.y - avg.len * np.sin(avg.angle) * coef + avg.overlay_y
+            x1 = avg.x0 + avg.len * np.cos(avg.angle) * coef
+            y1 = avg.y0 - avg.len * np.sin(avg.angle) * coef + avg.overlay_y
             cv2.arrowedLine(
                 frame,
-                (int(avg.x), int(avg.y) + avg.overlay_y),
+                (int(avg.x0), int(avg.y0) + avg.overlay_y),
                 (int(x1), int(y1)),
                 (0, 0, 0),
                 thickness=2,
@@ -79,7 +81,7 @@ class OpticalFlow(object):
             )
             cv2.arrowedLine(
                 frame,
-                (int(avg.x), int(avg.y) + avg.overlay_y),
+                (int(avg.x0), int(avg.y0) + avg.overlay_y),
                 (int(x1), int(y1)),
                 (255, 255, 255),
                 thickness=1,
@@ -174,7 +176,7 @@ class OpticalFlow(object):
         angle = np.arctan2(*v.T[::-1])
 
         return Vector(
-            center_xb, center_yb, length, angle,
+            center_xa, center_ya, center_xb, center_yb, length, angle,
             max_frames=self.num_frames,
             overlay_y=int(-(box_a[3] - box_a[1]) * 0.3)
         )
@@ -200,43 +202,59 @@ class OpticalFlow(object):
 
 
 class Vector(object):
-    def __init__(self, x=0, y=0, len=0., angle=0., overlay_y=0, max_frames=5):
-        self.x = x
-        self.y = y
+    def __init__(self, x0=0, y0=0, x1=0, y1=0, len=0., angle=0., overlay_y=0, max_frames=5):
+        self.x0 = x0
+        self.y0 = y0
+        self.x1 = x1
+        self.y1 = y1
+        self.vectors = np.array([[x1 - x0, y1 - y0]])
         self.overlay_y = overlay_y
-        self.len = [len]
-        self.angle = [angle]
+        self.len = len
+        self.angle = angle
         self.frames = 1
         self.max_frames = max_frames
         self.updated_at = time.time()
 
     def avg_per_frame(self):
+        mean = np.mean(self.vectors, axis=0)
+        length = np.sqrt(np.square(mean[0]) + np.square(mean[1]))
+        v = np.array([mean[0], mean[1]])
+        angle = np.arctan2(*v.T[::-1])
         return Vector(
-            self.x,
-            self.y,
-            sum(self.len) / self.frames,
-            sum(self.angle) / self.frames,
+            self.x1,
+            self.y1,
+            mean[0],
+            mean[1],
+            length,
+            angle,
             overlay_y=self.overlay_y,
         )
 
     def distance(self, v: 'Vector'):
-        return np.sqrt(np.square(self.x - v.x) + np.square(self.y - v.y))
+        return np.sqrt(np.square(self.x1 - v.x1) + np.square(self.y1 - v.y1))
 
     def update(self, v: 'Vector'):
-        self.x = v.x
-        self.y = v.y
-        self.len.extend(v.len)
-        self.angle.extend(v.angle)
+        self.x0 = v.x0
+        self.y0 = v.y0
+        self.x1 = v.x1
+        self.y1 = v.y1
+        self.vectors = np.concatenate(
+            (self.vectors, np.array([[self.x1 - self.x0, self.y1 - self.y0]]))
+        )
+        # self.len.extend(v.len)
+        # self.angle.extend(v.angle)
         self.frames += 1
+        self.updated_at = time.time()
 
-        if len(self.len) >= self.max_frames:
-            del self.len[0]
-            del self.angle[0]
+        if len(self.vectors) >= self.max_frames:
+            # del self.len[0]
+            # del self.angle[0]
+            self.vectors = np.delete(self.vectors, [0], axis=0)
             self.frames -= 1
 
     def __repr__(self):
         return (
-            f'<Vector x={self.x} y={self.y} '
+            f'<Vector ({self.x0},{self.y0}) -> ({self.x1}, {self.y1}) '
             f'len={self.len} angle={self.angle} '
             f'frames={self.frames}>'
         )

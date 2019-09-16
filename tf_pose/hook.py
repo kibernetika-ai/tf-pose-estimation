@@ -16,6 +16,7 @@ PARAMS = {
     'resize_out_ratio': 4.0,
     'target_size': (432, 368),
     'poses': True,
+    'intersection_threshold': 0.33,
 }
 load_lock = threading.Lock()
 loaded = False
@@ -24,6 +25,7 @@ loaded = False
 def init_hook(**params):
     PARAMS.update(params)
     PARAMS['resize_out_ratio'] = float(PARAMS['resize_out_ratio'])
+    PARAMS['intersection_threshold'] = float(PARAMS['intersection_threshold'])
     PARAMS['target_size'] = _parse_resolution(PARAMS['target_size'])
     PARAMS['poses'] = helpers.boolean_string(PARAMS['poses'])
     global e
