@@ -60,12 +60,14 @@ def process(inputs, ctx, **kwargs):
 
     if ctx.drivers[0].driver_name != 'null':
         vectors = o.calc_human_speed(image)
-        # __import__('ipdb').set_trace()
-        o.draw_vectors(image, vectors)
-        o.draw_boxes(image)
 
     if PARAMS['poses']:
         image = e.draw_humans(image, humans, imgcopy=True)
+
+    if ctx.drivers[0].driver_name != 'null':
+        # __import__('ipdb').set_trace()
+        o.draw_vectors(image, vectors)
+        o.draw_boxes(image)
 
     if is_video:
         image_output = image

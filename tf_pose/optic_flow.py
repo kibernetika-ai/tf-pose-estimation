@@ -75,7 +75,7 @@ class OpticalFlow(object):
                 (int(avg.x0), int(avg.y0) + avg.overlay_y),
                 (int(x1), int(y1)),
                 (0, 0, 0),
-                thickness=3,
+                thickness=5,
                 line_type=cv2.LINE_AA,
                 tipLength=0.4,
             )
@@ -83,8 +83,8 @@ class OpticalFlow(object):
                 frame,
                 (int(avg.x0), int(avg.y0) + avg.overlay_y),
                 (int(x1), int(y1)),
-                (255, 255, 255),
-                thickness=2,
+                (250, 0, 0),
+                thickness=3,
                 line_type=cv2.LINE_AA,
                 tipLength=0.4,
             )
