@@ -271,7 +271,7 @@ class PoseEstimator:
         pass
 
     @staticmethod
-    def estimate_paf(peaks, heat_mat, paf_mat):
+    def estimate_paf(peaks, heat_mat, paf_mat, offset=(0, 0), shape=(0, 0), full_shape=(0, 0)):
         pafprocess.process_paf(peaks, heat_mat, paf_mat)
 
         humans = []
@@ -285,10 +285,16 @@ class PoseEstimator:
                     continue
 
                 is_added = True
+                # __import__('ipdb').set_trace()
+                if shape[0] != 0:
+                    x = (float(pafprocess.get_part_x(c_idx)) / heat_mat.shape[1] * shape[0] + offset[0]) / full_shape[0]
+                    y = (float(pafprocess.get_part_y(c_idx)) / heat_mat.shape[0] * shape[1] + offset[1]) / full_shape[1]
+                else:
+                    x = float(pafprocess.get_part_x(c_idx)) / heat_mat.shape[1]
+                    y = float(pafprocess.get_part_y(c_idx)) / heat_mat.shape[0]
                 human.body_parts[part_idx] = BodyPart(
                     '%d-%d' % (human_id, part_idx), part_idx,
-                    float(pafprocess.get_part_x(c_idx)) / heat_mat.shape[1],
-                    float(pafprocess.get_part_y(c_idx)) / heat_mat.shape[0],
+                    x, y,
                     pafprocess.get_part_score(c_idx)
                 )
 
@@ -536,7 +542,33 @@ class TfPoseEstimator:
         else:
             return cropped
 
-    def inference(self, npimg, resize_to_default=True, upsample_size=1.0):
+    def inference(self, npimg, resize_to_default=True, upsample_size=1.0, person_boxes=None):
+        if person_boxes is None:
+            return self._inference(npimg, resize_to_default, upsample_size)
+
+        margin = 0.0
+        humans = []
+        for box in person_boxes:
+            box_w = box[2] - box[0]
+            box_h = box[3] - box[1]
+            crop_x0 = max(0, int(box[0] - margin * box_w))
+            crop_x1 = min(int(box[2] + margin * box_w), npimg.shape[1])
+            crop_y0 = max(0, int(box[1] - margin * box_h))
+            crop_y1 = min(int(box[3] + margin * box_h), npimg.shape[0])
+
+            _humans = self._inference(
+                npimg[crop_y0:crop_y1, crop_x0:crop_x1].copy(),
+                resize_to_default,
+                upsample_size,
+                offset=(box[0], box[1]),
+                shape=(crop_x1 - crop_x0, crop_y1 - crop_y0),
+                full_shape=(npimg.shape[1], npimg.shape[0]),
+            )
+            humans.extend(_humans)
+
+        return humans
+
+    def _inference(self, npimg, resize_to_default=True, upsample_size=1.0, offset=(0, 0), shape=(0, 0), full_shape=(0, 0)):
         if npimg is None:
             raise Exception('The image is not valid. Please check your image exists.')
 
@@ -565,7 +597,14 @@ class TfPoseEstimator:
             self.heatMat.shape[1], self.heatMat.shape[0], self.pafMat.shape[1], self.pafMat.shape[0]))
 
         t = time.time()
-        humans = PoseEstimator.estimate_paf(peaks, self.heatMat, self.pafMat)
+        humans = PoseEstimator.estimate_paf(
+            peaks,
+            self.heatMat,
+            self.pafMat,
+            offset=offset,
+            shape=shape,
+            full_shape=full_shape
+        )
         logger.debug('estimate time=%.5f' % (time.time() - t))
         return humans
 
@@ -580,6 +619,6 @@ if __name__ == '__main__':
 
     t = time.time()
     humans = PoseEstimator.estimate_paf(data['peaks'], data['heatMat'], data['pafMat'])
-    dt = time.time() - t;
+    dt = time.time() - t
     t = time.time()
     logger.info('elapsed #humans=%d time=%.8f' % (len(humans), dt))

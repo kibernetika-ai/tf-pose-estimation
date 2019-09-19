@@ -17,6 +17,7 @@ PARAMS = {
     'target_size': (432, 368),
     'poses': True,
     'intersection_threshold': 0.33,
+    'crop_persons': False,
 }
 load_lock = threading.Lock()
 loaded = False
@@ -28,6 +29,7 @@ def init_hook(**params):
     PARAMS['intersection_threshold'] = float(PARAMS['intersection_threshold'])
     PARAMS['target_size'] = _parse_resolution(PARAMS['target_size'])
     PARAMS['poses'] = helpers.boolean_string(PARAMS['poses'])
+    PARAMS['crop_persons'] = helpers.boolean_string(PARAMS['crop_persons'])
     global e
 
     config = tf.ConfigProto()
@@ -51,17 +53,18 @@ def process(inputs, ctx, **kwargs):
                 loaded = True
 
     image, is_video = helpers.load_image(inputs, 'input')
+
+    boxes = None
+    if ctx.drivers[0].driver_name != 'null':
+        boxes, vectors = o.calc_human_speed(image)
+
     if PARAMS['poses']:
         humans = e.inference(
             image,
             resize_to_default=True,
-            upsample_size=PARAMS['resize_out_ratio']
+            upsample_size=PARAMS['resize_out_ratio'],
+            person_boxes=boxes if PARAMS['crop_persons'] else None,
         )
-
-    if ctx.drivers[0].driver_name != 'null':
-        vectors = o.calc_human_speed(image)
-
-    if PARAMS['poses']:
         image = e.draw_humans(image, humans, imgcopy=True)
 
     if ctx.drivers[0].driver_name != 'null':

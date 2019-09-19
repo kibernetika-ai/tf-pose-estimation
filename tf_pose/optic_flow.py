@@ -16,7 +16,7 @@ class OpticalFlow(object):
     def calc_human_speed(self, frame):
         if self.human_boxes is None:
             self.human_boxes = self.detect_persons(frame)
-            return []
+            return self.human_boxes, []
 
         # Compare human_boxes <-> new_boxes
         new_boxes = self.detect_persons(frame)
@@ -31,7 +31,7 @@ class OpticalFlow(object):
 
         if not self.vectors:
             self.vectors = new_vectors
-            return self.vectors
+            return self.human_boxes, self.vectors
 
         for v0 in self.vectors:
             for v1 in new_vectors:
@@ -47,7 +47,7 @@ class OpticalFlow(object):
             else:
                 i += 1
 
-        return self.vectors
+        return self.human_boxes, self.vectors
 
     def draw_boxes(self, frame):
         for box in self.human_boxes:
