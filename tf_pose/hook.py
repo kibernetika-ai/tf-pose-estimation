@@ -65,10 +65,10 @@ def process(inputs, ctx, **kwargs):
             upsample_size=PARAMS['resize_out_ratio'],
             person_boxes=boxes if PARAMS['crop_persons'] else None,
         )
+        # __import__('ipdb').set_trace()
         image = e.draw_humans(image, humans, imgcopy=True)
 
     if ctx.drivers[0].driver_name != 'null':
-        # __import__('ipdb').set_trace()
         o.draw_vectors(image, vectors)
         o.draw_boxes(image)
 

@@ -55,8 +55,15 @@ class OpticalFlow(object):
                 frame,
                 (int(box[0]), int(box[1])),
                 (int(box[2]), int(box[3])),  # (left, top), (right, bottom)
-                (0, 180, 180),
-                thickness=1,
+                (0, 0, 0),
+                thickness=3,
+            )
+            cv2.rectangle(
+                frame,
+                (int(box[0]), int(box[1])),
+                (int(box[2]), int(box[3])),  # (left, top), (right, bottom)
+                (220, 220, 0),
+                thickness=2,
             )
 
     @staticmethod

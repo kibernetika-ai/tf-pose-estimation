@@ -285,7 +285,6 @@ class PoseEstimator:
                     continue
 
                 is_added = True
-                # __import__('ipdb').set_trace()
                 if shape[0] != 0:
                     x = (float(pafprocess.get_part_x(c_idx)) / heat_mat.shape[1] * shape[0] + offset[0]) / full_shape[0]
                     y = (float(pafprocess.get_part_y(c_idx)) / heat_mat.shape[0] * shape[1] + offset[1]) / full_shape[1]
@@ -546,7 +545,7 @@ class TfPoseEstimator:
         if person_boxes is None:
             return self._inference(npimg, resize_to_default, upsample_size)
 
-        margin = 0.0
+        margin = 0.3
         humans = []
         for box in person_boxes:
             box_w = box[2] - box[0]
@@ -560,7 +559,7 @@ class TfPoseEstimator:
                 npimg[crop_y0:crop_y1, crop_x0:crop_x1].copy(),
                 resize_to_default,
                 upsample_size,
-                offset=(box[0], box[1]),
+                offset=(crop_x0, crop_y0),
                 shape=(crop_x1 - crop_x0, crop_y1 - crop_y0),
                 full_shape=(npimg.shape[1], npimg.shape[0]),
             )
