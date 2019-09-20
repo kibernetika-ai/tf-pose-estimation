@@ -545,7 +545,7 @@ class TfPoseEstimator:
         if person_boxes is None:
             return self._inference(npimg, resize_to_default, upsample_size)
 
-        margin = 0.3
+        margin = 0.5
         humans = []
         for box in person_boxes:
             box_w = box[2] - box[0]
