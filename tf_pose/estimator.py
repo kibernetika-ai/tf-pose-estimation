@@ -541,9 +541,21 @@ class TfPoseEstimator:
         else:
             return cropped
 
-    def inference(self, npimg, resize_to_default=True, upsample_size=1.0, person_boxes=None):
+    def inference(self, npimg, resize_to_default=True, upsample_size=1.0,
+                  person_boxes=None, crop_persons=False, limit_to_boxes=False):
         if person_boxes is None:
-            return self._inference(npimg, resize_to_default, upsample_size)
+            return self._inference(
+                npimg, resize_to_default, upsample_size,
+                full_shape=(npimg.shape[1], npimg.shape[0]),
+            )
+        elif limit_to_boxes and not crop_persons:
+            return self._inference(
+                npimg,
+                resize_to_default,
+                upsample_size,
+                person_boxes=person_boxes,
+                full_shape=(npimg.shape[1], npimg.shape[0]),
+            )
 
         margin = 0.5
         humans = []
@@ -567,7 +579,10 @@ class TfPoseEstimator:
 
         return humans
 
-    def _inference(self, npimg, resize_to_default=True, upsample_size=1.0, offset=(0, 0), shape=(0, 0), full_shape=(0, 0)):
+    def _inference(self, npimg, resize_to_default=True,
+                   upsample_size=1.0, offset=(0, 0),
+                   shape=(0, 0), full_shape=(0, 0),
+                   person_boxes=None):
         if npimg is None:
             raise Exception('The image is not valid. Please check your image exists.')
 
@@ -605,7 +620,25 @@ class TfPoseEstimator:
             full_shape=full_shape
         )
         logger.debug('estimate time=%.5f' % (time.time() - t))
-        return humans
+        if person_boxes is None:
+            return humans
+
+        new_humans = []
+        for human in humans:
+            in_box = False
+            for part in human.body_parts.values():
+                for box in person_boxes:
+                    if box[0] <= part.x * full_shape[0] <= box[2] and box[1] <= part.y * full_shape[1] <= box[3]:
+                        in_box = True
+                        break
+
+                if in_box:
+                    break
+
+            if in_box:
+                new_humans.append(human)
+
+        return new_humans
 
 
 if __name__ == '__main__':

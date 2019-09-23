@@ -17,6 +17,7 @@ PARAMS = {
     'target_size': (432, 368),
     'poses': True,
     'intersection_threshold': 0.33,
+    'one_person': True,
     'crop_persons': False,
 }
 load_lock = threading.Lock()
@@ -30,6 +31,7 @@ def init_hook(**params):
     PARAMS['target_size'] = _parse_resolution(PARAMS['target_size'])
     PARAMS['poses'] = helpers.boolean_string(PARAMS['poses'])
     PARAMS['crop_persons'] = helpers.boolean_string(PARAMS['crop_persons'])
+    PARAMS['one_person'] = helpers.boolean_string(PARAMS['one_person'])
     global e
 
     config = tf.ConfigProto()
@@ -56,14 +58,16 @@ def process(inputs, ctx, **kwargs):
 
     boxes = None
     if ctx.drivers[0].driver_name != 'null':
-        boxes, vectors = o.calc_human_speed(image)
+        boxes, vectors = o.calc_human_speed(image, one_person=PARAMS['one_person'])
 
     if PARAMS['poses']:
         humans = e.inference(
             image,
             resize_to_default=True,
             upsample_size=PARAMS['resize_out_ratio'],
-            person_boxes=boxes if PARAMS['crop_persons'] else None,
+            crop_persons=PARAMS['crop_persons'],
+            person_boxes=boxes,
+            limit_to_boxes=PARAMS['one_person'],
         )
         # __import__('ipdb').set_trace()
         image = e.draw_humans(image, humans, imgcopy=True)

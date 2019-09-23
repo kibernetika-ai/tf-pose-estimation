@@ -13,13 +13,13 @@ class OpticalFlow(object):
         self.human_boxes = None
         self.vectors = []
 
-    def calc_human_speed(self, frame):
+    def calc_human_speed(self, frame, one_person=False):
         if self.human_boxes is None:
-            self.human_boxes = self.detect_persons(frame)
+            self.human_boxes = self.detect_persons(frame, one_person=one_person)
             return self.human_boxes, []
 
         # Compare human_boxes <-> new_boxes
-        new_boxes = self.detect_persons(frame)
+        new_boxes = self.detect_persons(frame, one_person=one_person)
         new_vectors = []
         for b0 in self.human_boxes:
             for b1 in new_boxes:
@@ -96,15 +96,23 @@ class OpticalFlow(object):
                 tipLength=0.4,
             )
 
-    def detect_persons(self, frame, threshold=0.5):
+    def detect_persons(self, frame, threshold=0.5, one_person=False):
         if self.person_driver is None:
             return None
         elif self.person_driver.driver_name == "openvino":
-            return self._detect_openvino(frame, threshold)
+            boxes = self._detect_openvino(frame, threshold)
         elif self.person_driver.driver_name == "tensorflow":
-            return self._detect_tensorflow(frame, threshold)
+            boxes = self._detect_tensorflow(frame, threshold)
         else:
             return None
+
+        if not one_person:
+            return boxes
+
+        res_box = np.zeros([1, 5], dtype=boxes.dtype)
+        squares = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
+        res_box[0] = boxes[np.argmax(squares)]
+        return res_box
 
     def _detect_tensorflow(self, frame, threshold=0.5):
         input_name, input_shape = list(self.person_driver.inputs.items())[0]
