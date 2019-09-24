@@ -71,7 +71,7 @@ def process(inputs, ctx, **kwargs):
             upsample_size=PARAMS['resize_out_ratio'],
             crop_persons=PARAMS['crop_persons'],
             person_boxes=boxes,
-            limit_to_boxes=PARAMS['one_person'],
+            one_person=PARAMS['one_person'],
         )
         # __import__('ipdb').set_trace()
         image = e.draw_humans(image, humans, imgcopy=True)

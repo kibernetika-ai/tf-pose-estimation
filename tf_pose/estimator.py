@@ -542,13 +542,13 @@ class TfPoseEstimator:
             return cropped
 
     def inference(self, npimg, resize_to_default=True, upsample_size=1.0,
-                  person_boxes=None, crop_persons=False, limit_to_boxes=False):
+                  person_boxes=None, crop_persons=False, one_person=False):
         if person_boxes is None:
             return self._inference(
                 npimg, resize_to_default, upsample_size,
                 full_shape=(npimg.shape[1], npimg.shape[0]),
             )
-        elif limit_to_boxes and not crop_persons:
+        elif one_person and not crop_persons:
             return self._inference(
                 npimg,
                 resize_to_default,
@@ -624,21 +624,21 @@ class TfPoseEstimator:
             return humans
 
         new_humans = []
-        for human in humans:
-            in_box = True
+        max_parts = 0
+        candidate = None
+        for i, human in enumerate(humans):
+            parts = 0
             for part in human.body_parts.values():
                 for box in person_boxes:
                     if box[0] <= part.x * full_shape[0] <= box[2] and box[1] <= part.y * full_shape[1] <= box[3]:
-                        pass
-                    else:
-                        in_box = False
-                        break
+                        parts += 1
+                        if parts > max_parts:
+                            max_parts = parts
+                            candidate = i
 
-                if in_box:
-                    break
-
-            if in_box:
-                new_humans.append(human)
+        if candidate is not None:
+            print(max_parts)
+            new_humans.append(humans[candidate])
 
         return new_humans
 
