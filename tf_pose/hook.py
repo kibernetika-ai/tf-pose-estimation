@@ -19,6 +19,8 @@ PARAMS = {
     'intersection_threshold': 0.33,
     'one_person': True,
     'crop_persons': False,
+    'draw_vectors': False,
+    'draw_boxes': False,
 }
 load_lock = threading.Lock()
 loaded = False
@@ -32,6 +34,8 @@ def init_hook(**params):
     PARAMS['poses'] = helpers.boolean_string(PARAMS['poses'])
     PARAMS['crop_persons'] = helpers.boolean_string(PARAMS['crop_persons'])
     PARAMS['one_person'] = helpers.boolean_string(PARAMS['one_person'])
+    PARAMS['draw_vectors'] = helpers.boolean_string(PARAMS['draw_vectors'])
+    PARAMS['draw_boxes'] = helpers.boolean_string(PARAMS['draw_boxes'])
     global e
 
     config = tf.ConfigProto()
@@ -73,8 +77,10 @@ def process(inputs, ctx, **kwargs):
         image = e.draw_humans(image, humans, imgcopy=True)
 
     if ctx.drivers[0].driver_name != 'null':
-        o.draw_vectors(image, vectors)
-        o.draw_boxes(image)
+        if PARAMS['draw_vectors']:
+            o.draw_vectors(image, vectors)
+        if PARAMS['draw_boxes']:
+            o.draw_boxes(image)
 
     if is_video:
         image_output = image

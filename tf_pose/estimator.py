@@ -625,11 +625,13 @@ class TfPoseEstimator:
 
         new_humans = []
         for human in humans:
-            in_box = False
+            in_box = True
             for part in human.body_parts.values():
                 for box in person_boxes:
                     if box[0] <= part.x * full_shape[0] <= box[2] and box[1] <= part.y * full_shape[1] <= box[3]:
-                        in_box = True
+                        pass
+                    else:
+                        in_box = False
                         break
 
                 if in_box:
