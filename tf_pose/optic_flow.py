@@ -267,6 +267,13 @@ class Vector(object):
             self.vectors = np.delete(self.vectors, [0], axis=0)
             self.frames -= 1
 
+    def drawing_coords(self, coef=5.):
+        avg = self.avg_per_frame()
+        # v: x, y, len, angle
+        x1 = avg.x0 + avg.len * np.cos(avg.angle) * coef
+        y1 = avg.y0 - avg.len * np.sin(avg.angle) * coef + avg.overlay_y
+        return (int(avg.x0), int(avg.y0)), (int(x1), int(y1))
+
     def __repr__(self):
         return (
             f'<Vector ({self.x0},{self.y0}) -> ({self.x1}, {self.y1}) '

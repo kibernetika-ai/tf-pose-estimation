@@ -21,6 +21,7 @@ PARAMS = {
     'crop_persons': False,
     'draw_vectors': False,
     'draw_boxes': False,
+    'skeleton_vectors': True,
 }
 load_lock = threading.Lock()
 loaded = False
@@ -36,6 +37,7 @@ def init_hook(**params):
     PARAMS['one_person'] = helpers.boolean_string(PARAMS['one_person'])
     PARAMS['draw_vectors'] = helpers.boolean_string(PARAMS['draw_vectors'])
     PARAMS['draw_boxes'] = helpers.boolean_string(PARAMS['draw_boxes'])
+    PARAMS['skeleton_vectors'] = helpers.boolean_string(PARAMS['skeleton_vectors'])
     global e
 
     config = tf.ConfigProto()
@@ -73,8 +75,7 @@ def process(inputs, ctx, **kwargs):
             person_boxes=boxes,
             one_person=PARAMS['one_person'],
         )
-        # __import__('ipdb').set_trace()
-        image = e.draw_humans(image, humans, imgcopy=True)
+        image = e.draw_humans(image, humans, imgcopy=True, vectors=PARAMS['skeleton_vectors'])
 
     if ctx.drivers[0].driver_name != 'null':
         if PARAMS['draw_vectors']:

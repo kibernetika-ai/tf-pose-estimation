@@ -1,6 +1,8 @@
 import logging
 import math
 
+import typing
+
 import slidingwindow as sw
 
 import cv2
@@ -10,6 +12,7 @@ import time
 
 from tf_pose import common
 from tf_pose.common import CocoPart
+from tf_pose import optic_flow
 from tf_pose.tensblur.smoother import Smoother
 import tensorflow.contrib.tensorrt as trt
 
@@ -310,6 +313,9 @@ class TfPoseEstimator:
 
     def __init__(self, graph_path, target_size=(320, 240), tf_config=None, trt_bool=False):
         self.target_size = target_size
+        self.humans = None
+        self.foot1_vector = None
+        self.foot2_vector = None
 
         # load graph
         logger.info('loading graph from %s(default size=%dx%d)' % (graph_path, target_size[0], target_size[1]))
@@ -409,8 +415,7 @@ class TfPoseEstimator:
         npimg_q = npimg_q.astype(np.uint8)
         return npimg_q
 
-    @staticmethod
-    def draw_humans(npimg, humans, imgcopy=False):
+    def draw_humans(self, npimg, humans, imgcopy=False, vectors=False):
         if imgcopy:
             npimg = np.copy(npimg)
         image_h, image_w = npimg.shape[:2]
@@ -438,7 +443,69 @@ class TfPoseEstimator:
                     common.CocoColors[pair_order], 2, lineType=cv2.LINE_AA
                 )
 
+        if vectors:
+            self.draw_vectors(npimg, humans)
+
         return npimg
+
+    def draw_vectors(self, img, humans: typing.List[Human]):
+        if self.humans is None:
+            return
+
+        if len(humans) < 1:
+            return
+        if len(self.humans) < 1:
+            return
+
+        if 10 in humans[0].body_parts and 10 in self.humans[0].body_parts:
+            foot1 = humans[0].body_parts[10]
+            foot1_prev = self.humans[0].body_parts[10]
+        else:
+            foot1 = None
+            foot1_prev = None
+
+        if 13 in humans[0].body_parts and 13 in self.humans[0].body_parts:
+            foot2 = humans[0].body_parts[13]
+            foot2_prev = self.humans[0].body_parts[13]
+        else:
+            foot2 = None
+            foot2_prev = None
+
+        self.humans = humans
+
+        if foot1 is not None:
+            foot1_vector = optic_flow.Vector(
+                foot1_prev.x * img.shape[1],
+                foot1_prev.y * img.shape[0],
+                foot1.x * img.shape[1],
+                foot1.y * img.shape[0],
+                max_frames=10,
+            )
+            if self.foot1_vector is None:
+                self.foot1_vector = foot1_vector
+            else:
+                self.foot1_vector.update(foot1_vector)
+            p0, p1 = self.foot1_vector.drawing_coords(coef=3.0)
+            cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
+            cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
+
+        if foot2 is not None:
+            foot2_vector = optic_flow.Vector(
+                foot2_prev.x * img.shape[1],
+                foot2_prev.y * img.shape[0],
+                foot2.x * img.shape[1],
+                foot2.y * img.shape[0],
+                max_frames=10,
+            )
+
+            if self.foot2_vector is None:
+                self.foot2_vector = foot2_vector
+            else:
+                self.foot2_vector.update(foot2_vector)
+
+            p0, p1 = self.foot2_vector.drawing_coords(coef=3.0)
+            cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
+            cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
 
     def _get_scaled_img(self, npimg, scale):
         get_base_scale = lambda s, w, h: max(self.target_size[0] / float(h), self.target_size[1] / float(w)) * s
@@ -544,18 +611,24 @@ class TfPoseEstimator:
     def inference(self, npimg, resize_to_default=True, upsample_size=1.0,
                   person_boxes=None, crop_persons=False, one_person=False):
         if person_boxes is None:
-            return self._inference(
+            humans = self._inference(
                 npimg, resize_to_default, upsample_size,
                 full_shape=(npimg.shape[1], npimg.shape[0]),
             )
+            if self.humans is None:
+                self.humans = humans
+            return humans
         elif one_person and not crop_persons:
-            return self._inference(
+            humans = self._inference(
                 npimg,
                 resize_to_default,
                 upsample_size,
                 person_boxes=person_boxes,
                 full_shape=(npimg.shape[1], npimg.shape[0]),
             )
+            if self.humans is None:
+                self.humans = humans
+            return humans
 
         margin = 0.5
         humans = []
@@ -577,6 +650,8 @@ class TfPoseEstimator:
             )
             humans.extend(_humans)
 
+        if self.humans is None:
+            self.humans = humans
         return humans
 
     def _inference(self, npimg, resize_to_default=True,
@@ -625,19 +700,29 @@ class TfPoseEstimator:
 
         new_humans = []
         max_parts = 0
+        max_std_x = 0
+        max_std_y = 0
         candidate = None
         for i, human in enumerate(humans):
+            arr_x = []
+            arr_y = []
             parts = 0
             for part in human.body_parts.values():
                 for box in person_boxes:
                     if box[0] <= part.x * full_shape[0] <= box[2] and box[1] <= part.y * full_shape[1] <= box[3]:
                         parts += 1
+                        arr_x += [part.x]
+                        arr_y += [part.y]
                         if parts > max_parts:
                             max_parts = parts
                             candidate = i
 
+            if arr_x and max(arr_x) - min(arr_x) > max_std_x and arr_y and max(arr_y) - min(arr_y) > max_std_y:
+                max_std_y = max(arr_y) - min(arr_y)
+                max_std_x = max(arr_x) - min(arr_x)
+                candidate = i
+
         if candidate is not None:
-            print(max_parts)
             new_humans.append(humans[candidate])
 
         return new_humans
