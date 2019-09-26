@@ -7,6 +7,7 @@ import slidingwindow as sw
 
 import cv2
 import numpy as np
+from scipy.spatial import distance
 import tensorflow as tf
 import time
 
@@ -316,6 +317,7 @@ class TfPoseEstimator:
         self.humans = None
         self.foot1_vector = None
         self.foot2_vector = None
+        self.draw_vector_threshold = 5.
 
         # load graph
         logger.info('loading graph from %s(default size=%dx%d)' % (graph_path, target_size[0], target_size[1]))
@@ -486,8 +488,10 @@ class TfPoseEstimator:
             else:
                 self.foot1_vector.update(foot1_vector)
             p0, p1 = self.foot1_vector.drawing_coords(coef=3.0)
-            cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
-            cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
+
+            if distance.cdist([p0], [p1])[0][0] > self.draw_vector_threshold:
+                cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
+                cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
 
         if foot2 is not None:
             foot2_vector = optic_flow.Vector(
@@ -504,8 +508,9 @@ class TfPoseEstimator:
                 self.foot2_vector.update(foot2_vector)
 
             p0, p1 = self.foot2_vector.drawing_coords(coef=3.0)
-            cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
-            cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
+            if distance.cdist([p0], [p1])[0][0] > self.draw_vector_threshold:
+                cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
+                cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
 
     def _get_scaled_img(self, npimg, scale):
         get_base_scale = lambda s, w, h: max(self.target_size[0] / float(h), self.target_size[1] / float(w)) * s
