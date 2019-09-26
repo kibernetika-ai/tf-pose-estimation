@@ -493,6 +493,12 @@ class TfPoseEstimator:
                 cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
                 cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
 
+                cx, cy = optic_flow.center(p0, p1)
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                length = self.foot1_vector.avg_per_frame().len
+                cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (0, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+                cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (250, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+
         if foot2 is not None:
             foot2_vector = optic_flow.Vector(
                 foot2_prev.x * img.shape[1],
@@ -511,6 +517,14 @@ class TfPoseEstimator:
             if distance.cdist([p0], [p1])[0][0] > self.draw_vector_threshold:
                 cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
                 cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
+
+                cx, cy = optic_flow.center(p0, p1)
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                length = self.foot2_vector.avg_per_frame().len
+                cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (0, 0, 0), thickness=2,
+                            lineType=cv2.LINE_AA)
+                cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (250, 0, 0), thickness=1,
+                            lineType=cv2.LINE_AA)
 
     def _get_scaled_img(self, npimg, scale):
         get_base_scale = lambda s, w, h: max(self.target_size[0] / float(h), self.target_size[1] / float(w)) * s

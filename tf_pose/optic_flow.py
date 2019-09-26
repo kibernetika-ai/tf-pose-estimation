@@ -281,3 +281,10 @@ class Vector(object):
             f'frames={self.frames}>'
         )
 
+
+def center(p0, p1, to_int=True):
+    x = (p0[0] + p1[0]) / 2
+    y = (p0[1] + p1[1]) / 2
+    if to_int:
+        return int(x), int(y)
+    return x, y
