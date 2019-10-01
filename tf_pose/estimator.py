@@ -315,8 +315,7 @@ class TfPoseEstimator:
     def __init__(self, graph_path, target_size=(320, 240), tf_config=None, trt_bool=False):
         self.target_size = target_size
         self.humans = None
-        self.foot1_vector = None
-        self.foot2_vector = None
+        self.bodyparts_vectors = {}
         self.draw_vector_threshold = 5.
 
         # load graph
@@ -459,35 +458,31 @@ class TfPoseEstimator:
         if len(self.humans) < 1:
             return
 
-        if 10 in humans[0].body_parts and 10 in self.humans[0].body_parts:
-            foot1 = humans[0].body_parts[10]
-            foot1_prev = self.humans[0].body_parts[10]
-        else:
-            foot1 = None
-            foot1_prev = None
+        # 4, 7 - hands
+        # 10, 13 - feet
+        needed_bodyparts = [4, 7, 10, 13]
 
-        if 13 in humans[0].body_parts and 13 in self.humans[0].body_parts:
-            foot2 = humans[0].body_parts[13]
-            foot2_prev = self.humans[0].body_parts[13]
-        else:
-            foot2 = None
-            foot2_prev = None
+        for bodypart_id in needed_bodyparts:
+            if bodypart_id in humans[0].body_parts and bodypart_id in self.humans[0].body_parts:
+                bp = humans[0].body_parts[bodypart_id]
+                bp_prev = self.humans[0].body_parts[bodypart_id]
+            else:
+                continue
 
-        self.humans = humans
-
-        if foot1 is not None:
-            foot1_vector = optic_flow.Vector(
-                foot1_prev.x * img.shape[1],
-                foot1_prev.y * img.shape[0],
-                foot1.x * img.shape[1],
-                foot1.y * img.shape[0],
+            bp_vector = optic_flow.Vector(
+                bp_prev.x * img.shape[1],
+                bp_prev.y * img.shape[0],
+                bp.x * img.shape[1],
+                bp.y * img.shape[0],
                 max_frames=10,
             )
-            if self.foot1_vector is None:
-                self.foot1_vector = foot1_vector
+            if self.bodyparts_vectors.get(bodypart_id) is None:
+                self.bodyparts_vectors[bodypart_id] = bp_vector
             else:
-                self.foot1_vector.update(foot1_vector)
-            p0, p1 = self.foot1_vector.drawing_coords(coef=3.0)
+                self.bodyparts_vectors[bodypart_id].update(bp_vector)
+
+            p0, p1 = self.bodyparts_vectors[bodypart_id].drawing_coords(coef=3.0)
+            # __import__('ipdb').set_trace()
 
             if distance.cdist([p0], [p1])[0][0] > self.draw_vector_threshold:
                 cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
@@ -495,36 +490,13 @@ class TfPoseEstimator:
 
                 cx, cy = optic_flow.center(p0, p1)
                 font = cv2.FONT_HERSHEY_SIMPLEX
-                length = self.foot1_vector.avg_per_frame().len
-                cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (0, 0, 0), thickness=2, lineType=cv2.LINE_AA)
-                cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (250, 0, 0), thickness=1, lineType=cv2.LINE_AA)
-
-        if foot2 is not None:
-            foot2_vector = optic_flow.Vector(
-                foot2_prev.x * img.shape[1],
-                foot2_prev.y * img.shape[0],
-                foot2.x * img.shape[1],
-                foot2.y * img.shape[0],
-                max_frames=10,
-            )
-
-            if self.foot2_vector is None:
-                self.foot2_vector = foot2_vector
-            else:
-                self.foot2_vector.update(foot2_vector)
-
-            p0, p1 = self.foot2_vector.drawing_coords(coef=3.0)
-            if distance.cdist([p0], [p1])[0][0] > self.draw_vector_threshold:
-                cv2.arrowedLine(img, p0, p1, (0, 0, 0), 3, line_type=cv2.LINE_AA)
-                cv2.arrowedLine(img, p0, p1, (250, 0, 0), 2, line_type=cv2.LINE_AA)
-
-                cx, cy = optic_flow.center(p0, p1)
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                length = self.foot2_vector.avg_per_frame().len
+                length = self.bodyparts_vectors[bodypart_id].avg_per_frame().len
                 cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (0, 0, 0), thickness=2,
                             lineType=cv2.LINE_AA)
                 cv2.putText(img, '{:.3f}'.format(length), (cx, cy), font, 0.7, (250, 0, 0), thickness=1,
                             lineType=cv2.LINE_AA)
+
+        self.humans = humans
 
     def _get_scaled_img(self, npimg, scale):
         get_base_scale = lambda s, w, h: max(self.target_size[0] / float(h), self.target_size[1] / float(w)) * s
