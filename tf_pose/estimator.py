@@ -474,7 +474,7 @@ class TfPoseEstimator:
                 bp_prev.y * img.shape[0],
                 bp.x * img.shape[1],
                 bp.y * img.shape[0],
-                max_frames=10,
+                max_frames=5,
             )
             if self.bodyparts_vectors.get(bodypart_id) is None:
                 self.bodyparts_vectors[bodypart_id] = bp_vector
