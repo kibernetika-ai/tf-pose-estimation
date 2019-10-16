@@ -111,6 +111,9 @@ class OpticalFlow(object):
 
         res_box = np.zeros([1, 5], dtype=boxes.dtype)
         squares = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
+        if len(squares) < 1 or len(boxes) < 1:
+            return []
+
         res_box[0] = boxes[np.argmax(squares)]
         return res_box
 
