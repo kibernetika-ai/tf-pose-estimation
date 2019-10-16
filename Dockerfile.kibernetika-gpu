@@ -1,0 +1,21 @@
+FROM kuberlab/serving:latest-openvino-gpu
+
+RUN apt update && apt install -y swig && \
+ pip install -U tensorflow-gpu==1.14.0 && \
+ pip install argparse \ 
+                dill \
+                fire \
+                matplotlib \
+                numba \
+                psutil \
+                pycocotools \
+                requests \
+                scikit-image \
+                scipy \
+                slidingwindow \
+                tqdm
+
+COPY tf_pose/pafprocess /build
+
+RUN cd /build && swig -python -c++ pafprocess.i && python3 setup.py build_ext --inplace && rm -rf /build
+
