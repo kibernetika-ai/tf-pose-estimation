@@ -92,6 +92,9 @@ def process(inputs, ctx, **kwargs):
 
 
 def _parse_resolution(s: str):
+    if isinstance(s, tuple):
+        return s
+
     splitted = s.split('x')
     if len(splitted) != 2:
         raise RuntimeError(f'Invalid resolution string: {s}')
