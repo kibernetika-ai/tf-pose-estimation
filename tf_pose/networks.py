@@ -127,7 +127,7 @@ def get_network(type, placeholder_input, sess_for_load=None, trainable=True):
     return net, pretrain_path_full, last_layer
 
 
-def get_graph_path(model_name):
+def get_graph_path(model_name, models_dir=dirname(dirname(abspath(__file__)))):
     dyn_graph_path = {
         'cmu': 'graph/cmu/graph_opt.pb',
         'openpose_quantize': 'graph/cmu/graph_opt_q.pb',
@@ -138,10 +138,10 @@ def get_graph_path(model_name):
         'mobilenet_v2_small': 'graph/mobilenet_v2_small/graph_opt.pb',
     }
 
-    base_data_dir = dirname(dirname(abspath(__file__)))
+    base_data_dir = models_dir
     if os.path.exists(os.path.join(base_data_dir, 'models')):
         base_data_dir = os.path.join(base_data_dir, 'models')
-    else:
+    elif os.path.exists(os.path.join(base_data_dir, 'tf_pose_data')):
         base_data_dir = os.path.join(base_data_dir, 'tf_pose_data')
 
     graph_path = os.path.join(base_data_dir, dyn_graph_path[model_name])

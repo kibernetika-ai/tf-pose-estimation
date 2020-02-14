@@ -1,3 +1,4 @@
+from os import path
 import threading
 
 import cv2
@@ -13,6 +14,7 @@ e: estimator.TfPoseEstimator = None
 o: optic_flow.OpticalFlow = optic_flow.OpticalFlow()
 PARAMS = {
     'model': 'mobilenet_thin',
+    'models_dir': path.dirname(path.dirname(path.abspath(__file__))),
     'resize_out_ratio': 4.0,
     'target_size': (432, 368),
     'poses': True,
@@ -45,7 +47,7 @@ def init_hook(**params):
 
     if PARAMS['poses']:
         e = estimator.TfPoseEstimator(
-            networks.get_graph_path(PARAMS['model']),
+            networks.get_graph_path(PARAMS['model'], models_dir=PARAMS['models_dir']),
             target_size=PARAMS['target_size'],
             tf_config=config,
         )
