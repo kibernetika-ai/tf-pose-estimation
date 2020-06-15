@@ -68,6 +68,17 @@ if __name__ == '__main__':
     parser.add_argument('--showBG', type=bool, default=True, help='False to show skeleton only.')
     args = parser.parse_args()
 
+    cap = cv2.VideoCapture(args.video)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    if args.rotate == "cw" or args.rotate == "ccw":
+        width, height = height, width
+    video_writer = None
+    if args.output:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # int(cap.get(cv2.CAP_PROP_FOURCC))
+        video_writer = cv2.VideoWriter(args.output, fourcc, fps, frameSize=(width, height))
+
     graph_path = get_graph_path(args.model, models_dir=args.modelsDir)
     logger.debug('initialization %s : %s' % (args.model, graph_path))
     w, h = model_wh(args.resolution)
@@ -82,17 +93,6 @@ if __name__ == '__main__':
     drv = driver.load_driver("tensorflow")
     d = drv()
     d.load_model(args.modelObjectDetection)
-
-    cap = cv2.VideoCapture(args.video)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    if args.rotate == "cw" or args.rotate == "ccw":
-        width, height = height, width
-    video_writer = None
-    if args.output:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # int(cap.get(cv2.CAP_PROP_FOURCC))
-        video_writer = cv2.VideoWriter(args.output, fourcc, fps, frameSize=(width, height))
 
     cnt = 0
     font_scale = (width + height) / 2 / 2000
