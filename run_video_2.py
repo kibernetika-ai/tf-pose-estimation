@@ -51,8 +51,11 @@ def _detect_bboxes_tensorflow(drv: driver.ServingDriver, frame: np.ndarray,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='tf-pose-estimation Video')
-    parser.add_argument('--video', type=str, default='')
+    parser.add_argument('--video', type=str, required=True)
+    parser.add_argument('--output', type=str, default=None)
+    parser.add_argument('--screen', action='store_true')
     parser.add_argument('--resolution', type=str, default='432x368', help='network input resolution. default=432x368')
+    parser.add_argument('--rotate', type=str, default=None, help='rotate video: cw / ccw')
     parser.add_argument('--model', type=str, default='mobilenet_thin', help='cmu / mobilenet_thin / mobilenet_v2_large / mobilenet_v2_small')
     parser.add_argument('--modelsDir', type=str, default='./models')
     parser.add_argument('--modelObjectDetection', type=str, default='./model-object-detection-1.0.0-faster-rcnn-resnet101-coco/saved_model')
@@ -77,39 +80,54 @@ if __name__ == '__main__':
     d.load_model(args.modelObjectDetection)
 
     cap = cv2.VideoCapture(args.video)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    if args.rotate == "cw" or args.rotate == "ccw":
+        width, height = height, width
+    video_writer = None
+    if args.output:
+        fourcc = cv2.VideoWriter_fourcc(*'MP4V')  # int(cap.get(cv2.CAP_PROP_FOURCC))
+        video_writer = cv2.VideoWriter(args.output, fourcc, fps, frameSize=(width, height))
 
     if cap.isOpened() is False:
         print("Error opening video stream or file")
     while cap.isOpened():
         ret_val, image = cap.read()
 
-        image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-        image = cv2.resize(image, (720, 1280))
-        # image = image[:, :, ::-1]
+        if args.rotate == "cw":
+            image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        elif args.rotate == "ccw":
+            image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         bboxes = _detect_bboxes_tensorflow(d, image)
-        bboxes = [bbox[:4].astype("int") for bbox in bboxes]
-        print("!!!! bboxes", bboxes)
+        bboxes = np.array([bbox[:4].astype("int") for bbox in bboxes])
 
         humans = e.inference(
             image,
             person_boxes=bboxes,
-            one_person=True,
+            upsample_size=4.0,
         )
-        print("!!!! humans", humans)
         if not args.showBG:
             image = np.zeros(image.shape)
 
         for bbox in bboxes:
             cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 127, 0))
 
-        image = e.draw_humans(image, humans, imgcopy=True, vectors=True)
+        image = e.draw_humans(image, humans)
 
         cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, 10),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        cv2.imshow('tf-pose-estimation result', image)
+        if args.screen:
+            cv2.imshow('tf-pose-estimation result', image)
+        if video_writer:
+            video_writer.write(image)
         fps_time = time.time()
         if cv2.waitKey(1) == 27:
             break
 
-    cv2.destroyAllWindows()
+    if args.screen:
+        cv2.destroyAllWindows()
+    if video_writer:
+        video_writer.release()
+
 logger.debug('finished+')
