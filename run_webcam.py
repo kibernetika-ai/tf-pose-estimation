@@ -57,7 +57,7 @@ if __name__ == '__main__':
         humans = e.inference(image, resize_to_default=(w > 0 and h > 0), upsample_size=args.resize_out_ratio)
 
         logger.debug('postprocess+')
-        image = TfPoseEstimator.draw_humans(image, humans, imgcopy=False)
+        image = e.draw_humans(image, humans, imgcopy=False)
 
         logger.debug('show+')
         cv2.putText(image,
