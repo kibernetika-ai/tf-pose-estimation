@@ -96,6 +96,8 @@ if __name__ == '__main__':
         print("Error opening video stream or file")
     while cap.isOpened():
         ret_val, image = cap.read()
+        if image is None:
+            break
 
         if args.rotate == "cw":
             image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
