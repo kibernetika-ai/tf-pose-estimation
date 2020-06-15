@@ -87,8 +87,10 @@ if __name__ == '__main__':
         width, height = height, width
     video_writer = None
     if args.output:
-        fourcc = cv2.VideoWriter_fourcc(*'MP4V')  # int(cap.get(cv2.CAP_PROP_FOURCC))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # int(cap.get(cv2.CAP_PROP_FOURCC))
         video_writer = cv2.VideoWriter(args.output, fourcc, fps, frameSize=(width, height))
+
+    cnt = 0
 
     if cap.isOpened() is False:
         print("Error opening video stream or file")
@@ -119,11 +121,15 @@ if __name__ == '__main__':
         cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, 10),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         if args.screen:
             cv2.imshow('tf-pose-estimation result', image)
+            if cv2.waitKey(1) == 27:
+                break
+
         if video_writer:
             video_writer.write(image)
         fps_time = time.time()
-        if cv2.waitKey(1) == 27:
-            break
+
+        cnt += 1
+        logger.debug('processed {} frames'.format(cnt))
 
     if args.screen:
         cv2.destroyAllWindows()
