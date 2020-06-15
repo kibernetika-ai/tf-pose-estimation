@@ -31,9 +31,9 @@ def _detect_bboxes_tensorflow(drv: driver.ServingDriver, frame: np.ndarray,
     scores = outputs["detection_scores"].copy().reshape([-1])
     scores = scores[np.where(scores > threshold)]
     boxes = boxes[:len(scores)]
+    classes = np.int32((outputs["detection_classes"].copy())).reshape([-1])
+    classes = classes[:len(scores)]
     if only_class is not None:
-        classes = np.int32((outputs["detection_classes"].copy())).reshape([-1])
-        classes = classes[:len(scores)]
         boxes = boxes[classes == only_class]
         scores = scores[classes == only_class]
     boxes[:, 0] *= frame.shape[0] + offset[0]
@@ -42,9 +42,12 @@ def _detect_bboxes_tensorflow(drv: driver.ServingDriver, frame: np.ndarray,
     boxes[:, 3] *= frame.shape[1] + offset[1]
     boxes[:, [0, 1, 2, 3]] = boxes[:, [1, 0, 3, 2]]  # .astype(int)
 
-    # add probabilities
+    # add probabilities and classes
     confidence = np.expand_dims(scores, axis=0).transpose()
-    boxes = np.concatenate((boxes, confidence), axis=1)
+    classes = np.expand_dims(classes, axis=0).transpose()
+    boxes = np.concatenate((boxes, confidence, classes), axis=1)
+
+    boxes = [[int(b[0]), int(b[1]), int(b[2]), int(b[3]), b[4], int(b[5])] for b in boxes]
 
     return boxes
 
@@ -54,6 +57,7 @@ if __name__ == '__main__':
     parser.add_argument('--video', type=str, required=True)
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--screen', action='store_true')
+    parser.add_argument('--drawBBoxes', action='store_true')
     parser.add_argument('--resolution', type=str, default='432x368', help='network input resolution. default=432x368')
     parser.add_argument('--rotate', type=str, default=None, help='rotate video: cw / ccw')
     parser.add_argument('--model', type=str, default='mobilenet_thin', help='cmu / mobilenet_thin / mobilenet_v2_large / mobilenet_v2_small')
@@ -91,6 +95,7 @@ if __name__ == '__main__':
         video_writer = cv2.VideoWriter(args.output, fourcc, fps, frameSize=(width, height))
 
     cnt = 0
+    font_scale = (width + height) / 2 / 2000
 
     if cap.isOpened() is False:
         print("Error opening video stream or file")
@@ -105,7 +110,6 @@ if __name__ == '__main__':
             image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         bboxes = _detect_bboxes_tensorflow(d, image)
-        bboxes = np.array([bbox[:4].astype("int") for bbox in bboxes])
 
         humans = e.inference(
             image,
@@ -115,12 +119,16 @@ if __name__ == '__main__':
         if not args.showBG:
             image = np.zeros(image.shape)
 
-        for bbox in bboxes:
-            cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 127, 0))
+        if args.drawBBoxes:
+            for bbox in bboxes:
+                cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0))
+                cv2.putText(image, "{}".format(bbox[5]), (bbox[0], bbox[1]), cv2.FONT_HERSHEY_SIMPLEX,
+                            font_scale, (0, 255, 0), 2)
 
         image = e.draw_humans(image, humans)
 
-        cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, 10),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, height / 100),
+                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 2)
         if args.screen:
             cv2.imshow('tf-pose-estimation result', image)
             if cv2.waitKey(1) == 27:
