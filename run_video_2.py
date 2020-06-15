@@ -127,7 +127,7 @@ if __name__ == '__main__':
 
         image = e.draw_humans(image, humans)
 
-        cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, height / 100),
+        cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, int(height / 100)),
                     cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 2)
         if args.screen:
             cv2.imshow('tf-pose-estimation result', image)
