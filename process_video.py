@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import time
 import tensorflow as tf
 
@@ -127,16 +128,23 @@ if __name__ == '__main__':
     if args.multiDetect:
         split_counts = list(map(int, args.multiDetect.split(",")))
 
-    cap = cv2.VideoCapture(args.video)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    if args.rotate == "cw" or args.rotate == "ccw":
-        width, height = height, width
-    video_writer = None
-    if args.output:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # int(cap.get(cv2.CAP_PROP_FOURCC))
-        video_writer = cv2.VideoWriter(args.output, fourcc, fps, frameSize=(width, height))
+    if not os.path.exists(args.video):
+        raise ValueError(f"{args.video} is absent")
+
+    process_dir = False
+    if os.path.isdir(args.video):
+        logger.info(f"{args.video} is directory, process each file")
+        process_dir = True
+        inputs = [
+            os.path.join(args.video, f)
+            for f in os.listdir(args.video)
+            if os.path.isfile(os.path.join(args.video, f))
+        ]
+        if args.output:
+            if not os.path.exists(args.output):
+                os.makedirs(args.output, 0o755)
+    else:
+        inputs = [args.video]
 
     graph_path = get_graph_path(args.model, models_dir=args.modelsDir)
     logger.debug('initialization %s : %s' % (args.model, graph_path))
@@ -153,59 +161,80 @@ if __name__ == '__main__':
     d = drv()
     d.load_model(args.modelObjectDetection)
 
-    cnt = 0
-    font_scale = (width + height) / 2 / 2000
+    for inp in inputs:
 
-    if cap.isOpened() is False:
-        print("Error opening video stream or file")
+        logger.info(f"processing video {inp}")
+        cap = cv2.VideoCapture(inp)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if args.rotate == "cw" or args.rotate == "ccw":
+            width, height = height, width
+        video_writer = None
+        if args.output:
+            if process_dir:
+                out = os.path.join(args.output, os.path.splitext(os.path.basename(inp))[0]+".m4v")
+            else:
+                out = args.output
+            logger.info(f"output video {out}")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # int(cap.get(cv2.CAP_PROP_FOURCC))
+            video_writer = cv2.VideoWriter(out, fourcc, fps, frameSize=(width, height))
 
-    while cap.isOpened():
-        ret_val, image = cap.read()
-        if image is None:
-            break
+        cnt = 0
+        font_scale = (width + height) / 2 / 2000
 
-        if args.rotate == "cw":
-            image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-        elif args.rotate == "ccw":
-            image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        if cap.isOpened() is False:
+            print("Error opening video stream or file")
 
-        bboxes = _detect_bboxes(d, image, split_counts=split_counts)
-
-        humans = e.inference(
-            image,
-            person_boxes=bboxes,
-            upsample_size=4.,
-        )
-        if not args.showBG:
-            image = np.zeros(image.shape)
-
-        if args.drawBBoxes:
-            for bbox in bboxes:
-                tl, br = (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3]))
-                cv2.rectangle(image, tl, br, (0, 255, 0))
-                cv2.putText(image, "{}".format(int(bbox[5])), tl, cv2.FONT_HERSHEY_SIMPLEX,
-                            font_scale, (0, 255, 0), 2)
-
-        image = e.draw_humans(image, humans)
-
-        cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, int(height / 100)),
-                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 2)
-
-        if args.screen:
-            cv2.imshow('tf-pose-estimation result', image)
-            if cv2.waitKey(1) == 27:
+        while cap.isOpened():
+            ret_val, image = cap.read()
+            if image is None:
                 break
 
+            if args.rotate == "cw":
+                image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+            elif args.rotate == "ccw":
+                image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+            bboxes = _detect_bboxes(d, image, split_counts=split_counts)
+
+            humans = e.inference(
+                image,
+                person_boxes=bboxes,
+                upsample_size=4.,
+            )
+            if not args.showBG:
+                image = np.zeros(image.shape)
+
+            if args.drawBBoxes:
+                for bbox in bboxes:
+                    tl, br = (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3]))
+                    cv2.rectangle(image, tl, br, (0, 255, 0))
+                    cv2.putText(image, "{}".format(int(bbox[5])), tl, cv2.FONT_HERSHEY_SIMPLEX,
+                                font_scale, (0, 255, 0), 2)
+
+            image = e.draw_humans(image, humans)
+
+            cv2.putText(image, "FPS: %f" % (1.0 / (time.time() - fps_time)), (10, int(height / 100)),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 2)
+
+            if args.screen:
+                cv2.imshow('tf-pose-estimation result', image)
+                if cv2.waitKey(1) == 27:
+                    break
+
+            if video_writer:
+                video_writer.write(image)
+            fps_time = time.time()
+
+            cnt += 1
+            logger.debug('processed {} frames'.format(cnt))
+
+        if args.screen:
+            cv2.destroyAllWindows()
         if video_writer:
-            video_writer.write(image)
-        fps_time = time.time()
+            video_writer.release()
 
-        cnt += 1
-        logger.debug('processed {} frames'.format(cnt))
-
-    if args.screen:
-        cv2.destroyAllWindows()
-    if video_writer:
-        video_writer.release()
+        cap.release()
 
 logger.debug('finished+')
